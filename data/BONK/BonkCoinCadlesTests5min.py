@@ -74,7 +74,7 @@ if __name__ == "__main__":
     df = fetch_candles_with_timeout(
         product_id="BONK-USD",
         granularity=300,     # 5 minutes
-        max_minutes=5        # <= Stop after 5 minutes
+        max_minutes=600        # <= Stop after 5 minutes
     )
 
     print(f"Fetched {len(df)} rows total.")

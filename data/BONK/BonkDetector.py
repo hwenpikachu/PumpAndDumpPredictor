@@ -140,8 +140,20 @@ import numpy as np
 def _ensure_features(df: pd.DataFrame) -> pd.DataFrame:
     """Compute minimal features if not already present."""
     out = df.copy()
-    if 'date' not in out.columns:
-        out['date'] = pd.to_datetime(out['unix'], unit='s', utc=True)
+    if "datetime" in out.columns:
+        out["date"] = pd.to_datetime(out["datetime"])
+    elif "timestamp_ms" in out.columns:
+        out["date"] = pd.to_datetime(out["timestamp_ms"], unit="ms")
+    elif "time" in out.columns:
+        out["date"] = pd.to_datetime(out["time"], unit="s")
+    elif "unix" in out.columns:
+        out["date"] = pd.to_datetime(out["unix"], unit="s", utc=True)
+    elif "date" in out.columns:
+        out["date"] = pd.to_datetime(out["date"])
+    else:
+        raise ValueError("No recognizable timestamp column found in BONK CSV.")
+    
+    
     if 'ret_body' not in out.columns:
         out['ret_body'] = (out['close'] - out['open']) / np.where(out['open'] == 0, np.nan, out['open'])
     if 'ret_cc' not in out.columns:
