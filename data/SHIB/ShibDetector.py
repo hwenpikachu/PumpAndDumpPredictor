@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pandas as pd
 
-ROOT_CSV = Path("../Coinbase_SHIBUSD_5min.csv")  # from SHIB/ folder
+ROOT_CSV = Path("Coinbase_SHIBUSD_5min.csv")  # from SHIB/ folder
 OUT_DIR = Path(".")  # current SHIB folder
 
 # Detection hyper-params (tweak if you want)
@@ -33,7 +33,7 @@ def load_candles() -> pd.DataFrame:
     if not ROOT_CSV.exists():
         raise FileNotFoundError(
             f"Could not find {ROOT_CSV}. "
-            "Run Coinbase_SHIBUSD_5min_collector.py first."
+            "Run Coinbase_SHIBUSD_5min.csv collector first."
         )
 
     df = pd.read_csv(ROOT_CSV)
@@ -45,18 +45,21 @@ def load_candles() -> pd.DataFrame:
         df["timestamp"] = pd.to_datetime(df["timestamp_ms"], unit="ms")
     elif "time" in df.columns:
         df["timestamp"] = pd.to_datetime(df["time"], unit="s")
+    elif "date" in df.columns:
+        # this matches your SHIB / PEPE collector output
+        df["timestamp"] = pd.to_datetime(df["date"], utc=True)
     else:
         raise ValueError("No recognizable time column in SHIB CSV.")
 
     df = df.sort_values("timestamp").reset_index(drop=True)
 
-    # basic sanity
     needed_cols = {"open", "high", "low", "close", "volume"}
     missing = needed_cols.difference(df.columns)
     if missing:
         raise ValueError(f"Missing columns in CSV: {missing}")
 
     return df
+
 
 
 def add_volume_baseline(df: pd.DataFrame) -> pd.DataFrame:
@@ -71,12 +74,6 @@ def add_volume_baseline(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def detect_events(df: pd.DataFrame):
-    """
-    Scan candles and detect pump / dump windows.
-
-    Returns:
-        pumps_df, dumps_df
-    """
     pumps = []
     dumps = []
 
@@ -84,6 +81,9 @@ def detect_events(df: pd.DataFrame):
     n = len(df)
 
     while i < n - WINDOW_CANDLES:
+        if i % 50000 == 0 and i > 0:
+            print(f"  scanned {i}/{n} candles...")
+
         window = df.iloc[i : i + WINDOW_CANDLES]
         start_row = window.iloc[0]
         start_price = float(start_row["close"])
@@ -96,7 +96,6 @@ def detect_events(df: pd.DataFrame):
         start_ts = start_row["timestamp"]
         end_ts = window["timestamp"].iloc[-1]
 
-        # pump detection
         if pct_up >= PUMP_PCT and total_vol >= VOLUME_MULTIPLIER * base_vol:
             pumps.append(
                 {
@@ -112,7 +111,6 @@ def detect_events(df: pd.DataFrame):
             i += WINDOW_CANDLES
             continue
 
-        # dump detection
         if pct_down <= DUMP_PCT and total_vol >= VOLUME_MULTIPLIER * base_vol:
             dumps.append(
                 {
@@ -134,6 +132,7 @@ def detect_events(df: pd.DataFrame):
     dumps_df = pd.DataFrame(dumps)
 
     return pumps_df, dumps_df
+
 
 
 def export_by_candle_and_day(pumps_df: pd.DataFrame, dumps_df: pd.DataFrame):
@@ -214,17 +213,24 @@ def export_pump_dump_sequences(pumps_df: pd.DataFrame, dumps_df: pd.DataFrame):
 
 
 def main():
+    print("Loading SHIB candles...")
     df = load_candles()
+    print(f"Loaded {len(df)} candles.")
+
+    print("Computing rolling volume baseline...")
     df = add_volume_baseline(df)
+    print("Volume baseline ready.")
 
+    print("Scanning for pump/dump windows...")
     pumps_df, dumps_df = detect_events(df)
-
+    print("Finished scan.")
     print(f"Detected {len(pumps_df)} pump windows and {len(dumps_df)} dump windows.")
 
+    print("Exporting CSVs...")
     export_by_candle_and_day(pumps_df, dumps_df)
     export_pump_dump_sequences(pumps_df, dumps_df)
+    print("Done. Files written in the SHIB/ folder.")
 
-    print("Exported SHIB pump/dump CSVs to the SHIB/ folder.")
 
 
 if __name__ == "__main__":
