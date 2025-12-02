@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pandas as pd
 
-ROOT_CSV = Path("../Coinbase_FLOKIUSD_5min.csv")  # from FLOKI/ folder
+ROOT_CSV = Path("Coinbase_FLOKIUSD_5min.csv")  # from FLOKI/ folder
 OUT_DIR = Path(".")  # current FLOKI folder
 
 # Detection hyper-params (tweak if you want)
@@ -45,8 +45,15 @@ def load_candles() -> pd.DataFrame:
         df["timestamp"] = pd.to_datetime(df["timestamp_ms"], unit="ms")
     elif "time" in df.columns:
         df["timestamp"] = pd.to_datetime(df["time"], unit="s")
+    elif "unix" in df.columns:
+        # Coinbase 5-min candles: unix timestamp in seconds
+        df["timestamp"] = pd.to_datetime(df["unix"], unit="s")
+    elif "date" in df.columns:
+        # Fallback: parse 'date' string if present
+        df["timestamp"] = pd.to_datetime(df["date"])
     else:
         raise ValueError("No recognizable time column in FLOKI CSV.")
+
 
     df = df.sort_values("timestamp").reset_index(drop=True)
 
