@@ -6,13 +6,13 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import classification_report, confusion_matrix
 
 
-def evaluate_and_plot(pred_csv="PEPE_5min_pump_predictions.csv"):
+def evaluate_and_plot(pred_csv="PEPE_5min_pump_forecast_predictions.csv"):
     df = pd.read_csv(pred_csv)
 
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"], utc=True, errors="coerce")
 
-    label_col = "pump_label_train"
+    label_col = "pump_forecast_label"
 
     # Helper to pick a model that actually has predictions
     def pick_model(df):
