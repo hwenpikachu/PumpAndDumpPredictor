@@ -23,39 +23,33 @@ df['volatility_288'] = df['ret_cc'].rolling(288).std()
 # Drop initial NaNs from pct_change/rolling
 df_model = df.dropna().copy()
 
-# --- Option B thresholds (Z-score + absolute minimum) ---
-ret_mean, ret_std = df_model['ret_body'].mean(), df_model['ret_body'].std(ddof=0)
-vol_mean, vol_std = df_model['vol_change'].mean(), df_model['vol_change'].std(ddof=0)
+# --- Quantile-based labels for supervised training ---
 
-# Sensitivity B
-abs_min_ret = 0.01  # 1% candle body
-z_k = 2.0
+# Choose loose-ish quantiles so we actually get some positive labels
+ret_hi_q = 0.99      # top 1% of candle body returns
+vol_q = 0.97         # top 3% of volume changes
+min_abs_ret = 0.008  # at least 0.8% move
 
-label_B = (
-    (df_model['ret_body'] > ret_mean + z_k * ret_std) &
-    (df_model['vol_change'] > vol_mean + z_k * vol_std) &
-    (df_model['ret_body'] > abs_min_ret)
+# Compute thresholds from the data
+ret_hi_thr = df_model['ret_body'].quantile(ret_hi_q)
+vol_thr = df_model['vol_change'].quantile(vol_q)
+
+# "Pump" training label: large positive return + big volume change
+label_train = (
+    (df_model['ret_body'] > max(min_abs_ret, ret_hi_thr)) &
+    (df_model['vol_change'] > vol_thr)
 ).astype(int)
-df_model['pump_label_B'] = label_B
-
-num_pos_B = int(df_model['pump_label_B'].sum())
-
-# If B finds zero positives, fall back to slightly higher sensitivity for training only
-used_sensitivity = 'B'
-if num_pos_B == 0:
-    z_k_train = 1.5
-    abs_min_ret_train = 0.005
-    label_train = (
-        (df_model['ret_body'] > ret_mean + z_k_train * ret_std) &
-        (df_model['vol_change'] > vol_mean + z_k_train * vol_std) &
-        (df_model['ret_body'] > abs_min_ret_train)
-    ).astype(int)
-    used_sensitivity = 'C (fallback for training)'
-else:
-    label_train = df_model['pump_label_B']
 
 df_model['pump_label_train'] = label_train
 num_pos_train = int(df_model['pump_label_train'].sum())
+
+# For compatibility with your existing summary / out_cols
+df_model['pump_label_B'] = df_model['pump_label_train']
+num_pos_B = num_pos_train
+used_sensitivity = f"quantiles(ret_hi_q={ret_hi_q}, vol_q={vol_q}, min_abs_ret={min_abs_ret})"
+
+print(f"Training labels: positives = {num_pos_train}, "
+      f"negatives = {len(df_model) - num_pos_train}")
 
 # Features
 features = ['ret_body', 'ret_cc', 'range', 'vol_change', 'volatility_288']
@@ -138,10 +132,16 @@ import pandas as pd
 import numpy as np
 
 def _ensure_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Compute minimal features if not already present."""
+    """Compute minimal features if not already present and ensure proper dtypes."""
     out = df.copy()
-    if 'date' not in out.columns:
+
+    # Always ensure 'date' is a proper datetime (UTC)
+    if 'date' in out.columns:
+        out['date'] = pd.to_datetime(out['date'], utc=True, errors='coerce')
+    else:
         out['date'] = pd.to_datetime(out['unix'], unit='s', utc=True)
+
+    # Ensure core features exist
     if 'ret_body' not in out.columns:
         out['ret_body'] = (out['close'] - out['open']) / np.where(out['open'] == 0, np.nan, out['open'])
     if 'ret_cc' not in out.columns:
@@ -152,52 +152,80 @@ def _ensure_features(df: pd.DataFrame) -> pd.DataFrame:
         out['vol_change'] = out['volume'].pct_change()
     if 'volatility_288' not in out.columns:
         out['volatility_288'] = out['ret_cc'].rolling(288).std()
-    return out.dropna().copy()
 
-def _thresholds_for_sensitivity(sensitivity: str):
-    """Return (z_k, min_abs_ret) for pump/dump based on sensitivity."""
+    # Drop rows where we don't have the needed features or date
+    out = out.dropna(subset=['date', 'ret_body', 'ret_cc', 'range', 'vol_change'])
+
+    return out.reset_index(drop=True)
+
+def _quantile_params(sensitivity: str):
+    """
+    Quantile-based thresholds for pump/dump:
+    - ret_hi_q: upper quantile for pump returns
+    - ret_lo_q: lower quantile for dump returns
+    - vol_q:   upper quantile for volume change
+    - min_abs_ret: minimum absolute return to avoid tiny moves
+    """
     s = sensitivity.upper()
-    if s == 'A':        # strict (few events)
-        return 3.0, 0.02   # 3σ and 2%
-    elif s == 'C':      # loose (many events)
-        return 1.5, 0.005  # 1.5σ and 0.5%
-    else:               # default 'B'
-        return 2.0, 0.01   # 2σ and 1%
-
-def _zscore_series(x: pd.Series, window: int | None):
-    """Global z-score if window is None; else rolling (local) z-score."""
-    if window is None:
-        mu, sig = x.mean(), x.std(ddof=0)
-        return (x - mu) / (sig if sig > 0 else 1.0)
-    else:
-        mu = x.rolling(window).mean()
-        sig = x.rolling(window).std(ddof=0)
-        sig = sig.replace(0, np.nan)
-        return (x - mu) / sig
+    if s == 'A':      # strict (few events)
+        return {
+            "ret_hi_q": 0.995,
+            "ret_lo_q": 0.005,
+            "vol_q": 0.99,
+            "min_abs_ret": 0.02,   # 2%
+        }
+    elif s == 'C':    # loose (many events)
+        return {
+            "ret_hi_q": 0.97,
+            "ret_lo_q": 0.03,
+            "vol_q": 0.95,
+            "min_abs_ret": 0.005,  # 0.5%
+        }
+    else:             # default 'B' (medium)
+        return {
+            "ret_hi_q": 0.99,
+            "ret_lo_q": 0.01,
+            "vol_q": 0.97,
+            "min_abs_ret": 0.01,   # 1%
+        }
 
 def generate_event_reports(
     df: pd.DataFrame,
     sensitivity: str = 'B',
-    rolling_window: int | None = None,    # e.g., 864 for ~3 days @ 5m; None = global
+    rolling_window: int | None = None,    # kept for compatibility, currently unused
     lookahead_minutes: int = 12 * 60      # link first dump within 12h after pump
 ):
     """
     Detects pump/dump 5m candles and writes per-candle, per-day, and pump->dump sequence CSVs.
+    Uses quantile-based thresholds so you actually get some events.
     sensitivity: 'A' (strict), 'B' (default), 'C' (loose)
-    rolling_window: None for global z-scores, or int window length in candles for local z-scores
+    rolling_window: currently ignored (could be used for local quantiles in future).
     """
     dfx = _ensure_features(df).sort_values('unix').reset_index(drop=True)
 
-    # Choose sensitivity thresholds
-    z_k, min_abs_ret = _thresholds_for_sensitivity(sensitivity)
+    # Get quantile parameters
+    params = _quantile_params(sensitivity)
+    ret_hi_q = params["ret_hi_q"]
+    ret_lo_q = params["ret_lo_q"]
+    vol_q = params["vol_q"]
+    min_abs_ret = params["min_abs_ret"]
 
-    # Compute z-scores either globally or rolling-window
-    z_ret = _zscore_series(dfx['ret_body'], rolling_window)
-    z_vol = _zscore_series(dfx['vol_change'], rolling_window)
+    # Compute quantile thresholds on the whole sample
+    ret_hi_thr = dfx['ret_body'].quantile(ret_hi_q)
+    ret_lo_thr = dfx['ret_body'].quantile(ret_lo_q)
+    vol_thr = dfx['vol_change'].quantile(vol_q)
 
-    # Pump & dump rules
-    pump_mask = (z_ret > z_k) & (z_vol > z_k) & (dfx['ret_body'] > min_abs_ret)
-    dump_mask = (z_ret < -z_k) & (z_vol > z_k) & (dfx['ret_body'] < -min_abs_ret)
+    # Pump: large positive return + large volume change
+    pump_mask = (
+        (dfx['ret_body'] > max(min_abs_ret, ret_hi_thr)) &
+        (dfx['vol_change'] > vol_thr)
+    )
+
+    # Dump: large negative return + large volume change
+    dump_mask = (
+        (dfx['ret_body'] < min(-min_abs_ret, ret_lo_thr)) &
+        (dfx['vol_change'] > vol_thr)
+    )
 
     pumps_df = dfx.loc[pump_mask, ['date','open','high','low','close','volume','ret_body','vol_change']].copy()
     dumps_df = dfx.loc[dump_mask, ['date','open','high','low','close','volume','ret_body','vol_change']].copy()
