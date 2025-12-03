@@ -24,6 +24,20 @@ def _load_data(price_csv, pumps_csv, dumps_csv):
     return df, pumps, dumps
 
 
+def _pump_and_dump_days(pumps: pd.DataFrame, dumps: pd.DataFrame):
+    """
+    Return sorted list of days (as datetime64[ns]) where there is
+    at least one pump and at least one dump.
+    """
+    if pumps.empty or dumps.empty:
+        return []
+
+    pump_days = set(pumps["date"].dt.floor("D"))
+    dump_days = set(dumps["date"].dt.floor("D"))
+    both = sorted(pump_days & dump_days)
+    return both
+
+
 def plot_price_with_events(
     price_csv="Coinbase_PEPEUSD_5min.csv",
     pumps_csv="pepe_pumps_by_candle.csv",
@@ -33,7 +47,8 @@ def plot_price_with_events(
     df, pumps, dumps = _load_data(price_csv, pumps_csv, dumps_csv)
 
     fig, ax = plt.subplots(figsize=(12, 5))
-    ax.plot(df["date"], df["close"], label="PEPE close (5m)", color="blue", linewidth=1.2, zorder=1)
+    ax.plot(df["date"], df["close"], label="PEPE close (5m)", color="blue",
+            linewidth=1.2, zorder=1)
 
     # Pump markers (GREEN, triangles up, on top)
     if not pumps.empty:
@@ -54,6 +69,21 @@ def plot_price_with_events(
             label="Dump candles",
             zorder=3
         )
+
+    # Vertical pink lines for days that have BOTH pump and dump
+    both_days = _pump_and_dump_days(pumps, dumps)
+    added_label = False
+    for d in both_days:
+        ax.axvline(
+            d,
+            color="magenta",
+            linestyle="--",
+            linewidth=1.2,
+            alpha=0.4,
+            zorder=2,
+            label="Pump & dump day" if not added_label else None,
+        )
+        added_label = True
 
     ax.set_xlabel("Time")
     ax.set_ylabel("Price (USD)")
@@ -101,6 +131,26 @@ def plot_events_per_day(
     ax.plot(days, pump_y, label="Pumps per day")
     ax.plot(days, dump_y, label="Dumps per day")
 
+    # Vertical pink lines for days with both pump and dump
+    if not pumps.empty and not dumps.empty:
+        # work with datetime.date objects
+        pump_days = set(pumps["day"])
+        dump_days = set(dumps["day"])
+        both_days = sorted(pump_days & dump_days)
+
+        added_label = False
+        for d in both_days:
+            ax.axvline(
+                d,
+                color="magenta",
+                linestyle="--",
+                linewidth=1.2,
+                alpha=0.4,
+                zorder=0,
+                label="Pump & dump day" if not added_label else None,
+            )
+            added_label = True
+
     ax.set_xlabel("Day (UTC)")
     ax.set_ylabel("Count")
     ax.set_title("Pump/Dump Counts Per Day")
@@ -145,7 +195,8 @@ def plot_price_with_events_first_month(
         dumps_m = dumps
 
     fig, ax = plt.subplots(figsize=(12, 5))
-    ax.plot(df_m["date"], df_m["close"], label="PEPE close (5m)", color="blue", linewidth=1.2, zorder=1)
+    ax.plot(df_m["date"], df_m["close"], label="PEPE close (5m)", color="blue",
+            linewidth=1.2, zorder=1)
 
     if not pumps_m.empty:
         ax.scatter(
@@ -164,6 +215,21 @@ def plot_price_with_events_first_month(
             label="Dump candles",
             zorder=3
         )
+
+    # Vertical pink lines for first-month days with both pump and dump
+    both_days = _pump_and_dump_days(pumps_m, dumps_m)
+    added_label = False
+    for d in both_days:
+        ax.axvline(
+            d,
+            color="magenta",
+            linestyle="--",
+            linewidth=1.2,
+            alpha=0.4,
+            zorder=2,
+            label="Pump & dump day" if not added_label else None,
+        )
+        added_label = True
 
     ax.set_xlabel("Time (first month)")
     ax.set_ylabel("Price (USD)")
@@ -214,6 +280,25 @@ def plot_events_per_day_first_month(
     fig, ax = plt.subplots(figsize=(12, 4))
     ax.plot(days, pump_y, label="Pumps per day")
     ax.plot(days, dump_y, label="Dumps per day")
+
+    # Vertical pink lines for days in first month with both pump and dump
+    if not pumps.empty and not dumps.empty:
+        pump_days = set(pumps["day"])
+        dump_days = set(dumps["day"])
+        both_days = sorted(pump_days & dump_days)
+
+        added_label = False
+        for d in both_days:
+            ax.axvline(
+                d,
+                color="magenta",
+                linestyle="--",
+                linewidth=1.2,
+                alpha=0.4,
+                zorder=0,
+                label="Pump & dump day" if not added_label else None,
+            )
+            added_label = True
 
     ax.set_xlabel("Day (UTC, first month)")
     ax.set_ylabel("Count")
