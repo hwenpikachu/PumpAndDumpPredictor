@@ -92,11 +92,14 @@ def evaluate_and_plot(pred_csv="PEPE_5min_pump_forecast_predictions.csv"):
     if "date" in test_df.columns:
         fig, ax = plt.subplots(figsize=(12, 4))
         ax.plot(test_df["date"], test_df["proba"], label="Predicted pump probability")
+
+        # --- RED arrows marking true pump events ---
         ax.scatter(
             test_df.loc[test_df[label_col] == 1, "date"],
             test_df.loc[test_df[label_col] == 1, "proba"],
-            marker="^", s=20, label="True pumps"
+            marker="^", s=28, color="red", label="True pumps (actual)"
         )
+
         ax.set_xlabel("Time (test region)")
         ax.set_ylabel("Probability / label")
         ax.set_title(f"{model_name.upper()} Pump Probability vs True Labels (Test Set)")

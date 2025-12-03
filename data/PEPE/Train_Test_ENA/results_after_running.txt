@@ -1,0 +1,54 @@
+PS C:\Users\herwe\VSCODEHerwen\3304\PumpAndDumpPredictor\data\PEPE\Train_Test_ENA> & C:/Users/herwe/VSCODEHerwen/3304/.venv/Scripts/python.exe c:/Users/herwe/VSCODEHerwen/3304/PumpAndDumpPredictor/data/PEPE/Train_Test_ENA/model_testing_pepe_ena.py
+Detecting pump/dump events for PEPE...
+{'asset_prefix': 'pepe', 'sensitivity': 'B', 'rolling_window': None, 'pumps_found': 77, 'dumps_found': 76, 'days_with_pumps': 70, 'days_with_dumps': 60, 'sequences_found': 8, 'files': {'pumps_by_candle': 'pepe_pumps_by_candle.csv', 'dumps_by_candle': 'pepe_dumps_by_candle.csv', 'pumps_by_day': 'pepe_pumps_by_day.csv', 'dumps_by_day': 'pepe_dumps_by_day.csv', 'pump_then_dump_sequences': 'pepe_pump_then_dump_sequences.csv'}}
+Detecting pump/dump events for ENA...
+{'asset_prefix': 'ena', 'sensitivity': 'B', 'rolling_window': None, 'pumps_found': 20, 'dumps_found': 17, 'days_with_pumps': 20, 'days_with_dumps': 16, 'sequences_found': 1, 'files': {'pumps_by_candle': 'ena_pumps_by_candle.csv', 'dumps_by_candle': 'ena_dumps_by_candle.csv', 'pumps_by_day': 'ena_pumps_by_day.csv', 'dumps_by_day': 'ena_dumps_by_day.csv', 'pump_then_dump_sequences': 'ena_pump_then_dump_sequences.csv'}}
+
+Building forecast dataset for PEPE (train)...
+Coinbase_PEPEUSD_5min.csv: forecast positives = 462, negatives = 109584
+
+Building forecast dataset for ENA (test)...
+Coinbase_ENAUSD_5min.csv: forecast positives = 120, negatives = 51341
+
+--- Dataset sizes (cross-asset) ---
+PEPE train size: 110046, positives: 462
+ENA  test size: 51461, positives: 120
+
+=== Logistic Regression (train=PEPE, test=ENA) ===
+              precision    recall  f1-score   support
+
+           0     0.9979    0.7032    0.8250     51341
+           1     0.0028    0.3583    0.0056       120
+
+    accuracy                         0.7024     51461
+   macro avg     0.5003    0.5308    0.4153     51461
+weighted avg     0.9956    0.7024    0.8231     51461
+
+Confusion matrix:
+ [[36103 15238]
+ [   77    43]]
+
+=== Random Forest (train=PEPE, test=ENA) ===
+C:\Users\herwe\VSCODEHerwen\3304\.venv\Lib\site-packages\sklearn\metrics\_classification.py:1731: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 in labels with no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", result.shape[0])
+C:\Users\herwe\VSCODEHerwen\3304\.venv\Lib\site-packages\sklearn\metrics\_classification.py:1731: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 in labels with no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", result.shape[0])
+C:\Users\herwe\VSCODEHerwen\3304\.venv\Lib\site-packages\sklearn\metrics\_classification.py:1731: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 in labels with no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", result.shape[0])
+              precision    recall  f1-score   support
+
+           0     0.9977    1.0000    0.9988     51341
+           1     0.0000    0.0000    0.0000       120
+
+    accuracy                         0.9977     51461
+   macro avg     0.4988    0.5000    0.4994     51461
+weighted avg     0.9953    0.9977    0.9965     51461
+
+Confusion matrix:
+ [[51341     0]
+ [  120     0]]
+
+RF feature importances (train=PEPE): {'ret_body': np.float64(0.1722065369604644), 'ret_cc': np.float64(0.16508777418922294), 'range': np.float64(0.2129927890907059), 'vol_change': np.float64(0.19257822159646626), 'volatility_288': np.float64(0.25713467816314056)}
+
+Saved PEPE training dataset to PEPE_5min_pump_forecast_trainset.csv
+Saved ENA test predictions (from PEPE model) to ENA_5min_pump_forecast_from_PEPE_model.csv
