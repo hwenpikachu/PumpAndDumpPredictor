@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import classification_report, confusion_matrix
 
 
-def evaluate_and_plot(pred_csv="PEPE_5min_pump_forecast_predictions.csv"):
+def evaluate_and_plot(pred_csv="ENA_5min_pump_forecast_from_PEPE_model.csv"):
     df = pd.read_csv(pred_csv)
 
     if "date" in df.columns:
@@ -97,7 +97,7 @@ def evaluate_and_plot(pred_csv="PEPE_5min_pump_forecast_predictions.csv"):
         ax.scatter(
             test_df.loc[test_df[label_col] == 1, "date"],
             test_df.loc[test_df[label_col] == 1, "proba"],
-            marker="^", s=28, color="red", label="True pumps (actual)"
+            marker="^", s=28, color="red", label="True pumps (actual)", zorder=5
         )
 
         ax.set_xlabel("Time (test region)")
