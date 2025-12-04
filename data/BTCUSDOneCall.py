@@ -1,6 +1,8 @@
 import pandas as pd
 import requests
 
+# Testing api call
+
 BASE = "https://api.exchange.coinbase.com"  # correct base
 
 def fetch_daily_data(symbol: str):
